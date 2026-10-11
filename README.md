@@ -17,7 +17,7 @@ cp .env.example .env        # add your API key
 uvicorn app:app --reload    # open http://localhost:8000 (use Chrome)
 ```
 ## Stream it
-Add `http://localhost:8000` as an OBS **Browser Source** to broadcast the avatar on
+Live at https://visiontalk-live-m2epoxwhl7nn74yqfck2jf.streamlit.app/` as an OBS **Browser Source** to broadcast the avatar on
 YouTube/Twitch/TikTok Live.
 
 ## Tech
