@@ -7,6 +7,7 @@ from PIL import Image
 from google import genai
 from google.genai import types
 import edge_tts
+from gtts import gTTS
 
 st.set_page_config(page_title="VisionTalk Live", page_icon="🎥", layout="wide")
 MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
@@ -35,7 +36,7 @@ let sp=false;const a=document.getElementById('a');
 if(a){a.onplay=()=>sp=true;a.onended=a.onpause=()=>sp=false;}
 setInterval(()=>{const k=sp?0.1+Math.random()*0.6:0.03;
  if(isS){m.setAttribute('ry',2+k*20);m.setAttribute('rx',sp?10+Math.random()*7:14)}
- else{const w=W*%SIZE%/100;m.style.width=w+'px';m.style.height=Math.max(2,w*k)+'px'}},90);
+ else{const w=W*%SIZE%/100;m.style.width=w+'px';m.style.height=Math.max(2,w*k)+'px';m.style.opacity=sp?0.9:0}},90);
 </script></body>"""
 
 def avatar_html(audio=None, photo=None, mx=50, my=72, size=14):
@@ -55,6 +56,13 @@ async def _tts(text, voice):
         if c["type"] == "audio":
             out += c["data"]
     return out
+
+GTTS = {"English": "en", "Urdu": "ur", "Arabic": "ar", "Spanish": "es", "French": "fr", "Hindi": "hi"}
+
+def gtts_voice(text, lang):
+    buf = io.BytesIO()
+    gTTS(text, lang=GTTS[lang]).write_to_fp(buf)
+    return buf.getvalue()
 
 @st.cache_resource
 def yolo():
@@ -92,8 +100,8 @@ with st.sidebar:
     lang = st.selectbox("Language", list(LANGS))
     use_yolo = st.checkbox("YOLO detection (hybrid)", value=False)
     photo_file = st.file_uploader("Use my photo as avatar", type=["jpg", "jpeg", "png"])
-    mx = st.slider("Mouth X %", 20, 80, 50); my = st.slider("Mouth Y %", 40, 90, 72)
-    size = st.slider("Mouth size", 6, 26, 14)
+    mx = st.slider("Mouth X %", 10, 90, 51); my = st.slider("Mouth Y %", 10, 90, 48)
+    size = st.slider("Mouth size", 4, 26, 9)
 try:
     key = st.secrets["GEMINI_API_KEY"]
 except Exception:
@@ -125,12 +133,16 @@ if q:
     with st.spinner("Thinking..."):
         reply = ask_vlm(genai.Client(api_key=key), img, q, system, objs)
         try:
-            st.session_state.audio = base64.b64encode(asyncio.run(_tts(reply, voice))).decode()
+            st.session_state.audio = base64.b64encode(gtts_voice(reply, lang)).decode()
         except Exception:
-            st.session_state.audio = None
+            try:
+                st.session_state.audio = base64.b64encode(asyncio.run(_tts(reply, voice))).decode()
+            except Exception as e:
+                st.session_state.audio = None
+                st.warning(f"Voice failed: {e}")
     st.session_state.hist += [("user", q), ("assistant", reply)]
 
 with col_av:
-    components.html(avatar_html(st.session_state.audio, photo, mx, my, size), height=620)
+    components.html(avatar_html(st.session_state.audio, photo, mx, my, size), height=720)
 for role, text in st.session_state.hist[-8:]:
     with st.chat_message(role): st.write(text)

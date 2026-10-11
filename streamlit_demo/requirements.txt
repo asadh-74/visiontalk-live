@@ -2,6 +2,7 @@
 streamlit
 google-genai
 edge-tts
+gtts
 pillow
 torch
 torchvision
