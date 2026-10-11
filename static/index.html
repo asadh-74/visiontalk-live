@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>VisionTalk Live</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#0f1220;color:#eef;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
+@media(max-width:800px){body{grid-template-columns:1fr}}
+.card{background:#181c30;border-radius:16px;padding:16px}h1{grid-column:1/-1;margin:0;font-size:20px}h1 span{color:#8b7bff}
+video{width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;object-fit:cover}#avatar{width:100%;max-width:320px;display:block;margin:auto}
+#log{height:170px;overflow:auto;font-size:14px;margin:10px 0}.u{color:#9ecbff}.a{color:#c9b8ff}
+button,select{background:#6c5ce7;color:#fff;border:0;border-radius:10px;padding:9px 12px;margin:3px;cursor:pointer;font-size:13px}
+button.on{background:#e17055}input[type=text]{width:100%;padding:10px;border-radius:10px;border:0;margin-top:6px}#status{font-size:12px;opacity:.7}
+label{font-size:13px}
+</style></head><body>
+<h1>VisionTalk <span>Live</span> · AI Avatar + Vision-Language Model</h1>
+<div class="card">
+ <video id="cam" autoplay muted playsinline></video>
+ <div>
+  <select id="persona"><option value="host">Host</option><option value="receptionist">Receptionist</option><option value="tutor">Tutor</option><option value="sales">Sales</option></select>
+  <select id="lang"><option value="en">English</option><option value="ur">Urdu</option><option value="ar">Arabic</option><option value="es">Spanish</option><option value="fr">French</option><option value="hi">Hindi</option></select>
+ </div>
+ <div><button id="mic">🎤 Hold to talk</button><button id="auto">👁 Auto: off</button><button id="exp">⬇ Export chat</button></div>
+ <div><label><input type="file" id="pdf" accept=".pdf,.txt" hidden><button onclick="pdf.click()">📄 Upload knowledge (PDF)</button></label>
+ <label><input type="checkbox" id="kb"> use knowledge base</label></div>
+ <input type="text" id="txt" placeholder="Type a question and press Enter">
+ <div id="status">Ready</div>
+</div>
+<div class="card">
+ <svg id="avatar" viewBox="0 0 200 220"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd9c0"/><stop offset="1" stop-color="#f3b392"/></linearGradient></defs>
+  <path d="M30 120C20 20 180 20 170 120C165 70 35 70 30 120Z" fill="#2d1b3d"/><rect x="85" y="165" width="30" height="35" fill="#f3b392"/>
+  <path d="M40 220C45 190 155 190 160 220Z" fill="#6c5ce7"/><ellipse cx="100" cy="110" rx="58" ry="68" fill="url(#g)"/>
+  <path d="M38 105C45 40 155 40 162 105C140 70 60 70 38 105Z" fill="#2d1b3d"/>
+  <g id="eyes"><ellipse cx="78" cy="108" rx="8" ry="10" fill="#fff"/><ellipse cx="122" cy="108" rx="8" ry="10" fill="#fff"/><circle cx="78" cy="110" r="5" fill="#3b2a1e"/><circle cx="122" cy="110" r="5" fill="#3b2a1e"/></g>
+  <path d="M66 92Q78 85 90 92M110 92Q122 85 134 92" stroke="#2d1b3d" stroke-width="3" fill="none"/><path d="M100 115L95 135H105" stroke="#d99a7a" stroke-width="2" fill="none"/>
+  <ellipse id="mouth" cx="100" cy="158" rx="14" ry="2" fill="#a8324a"/></svg>
+ <div id="log"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),cam=$('cam'),mouth=$('mouth'),eyes=$('eyes');
+let history=[],speaking=false,autoTimer=null,busy=false,q=[],playing=false;
+const RL={en:'en-US',ur:'ur-PK',ar:'ar-SA',es:'es-ES',fr:'fr-FR',hi:'hi-IN'};
+navigator.mediaDevices.getUserMedia({video:true}).then(s=>cam.srcObject=s).catch(()=>$('status').textContent='Camera blocked - text only');
+setInterval(()=>{eyes.style.transform='scaleY(.1)';eyes.style.transformOrigin='100px 109px';setTimeout(()=>eyes.style.transform='',120)},3500);
+setInterval(()=>{mouth.setAttribute('ry',speaking?3+Math.random()*13:2);mouth.setAttribute('rx',speaking?10+Math.random()*7:14)},90);
+function frame(){if(!cam.videoWidth)return null;const c=document.createElement('canvas');c.width=640;c.height=480;c.getContext('2d').drawImage(cam,0,0,640,480);return c.toDataURL('image/jpeg',.7).split(',')[1]}
+function enqueue(s){if(!s.trim())return;q.push(fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:s,lang:$('lang').value})}).then(r=>r.blob()));pump()}
+async function pump(){if(playing)return;playing=true;while(q.length){const b=await q.shift();const a=new Audio(URL.createObjectURL(b));speaking=true;await new Promise(r=>{a.onended=a.onerror=r;a.play().catch(r)})}speaking=false;playing=false}
+function stopAudio(){q=[]}
+function log(c,t){const d=document.createElement('div');d.className=c;d.innerHTML=`<b>${c=='u'?'You':'Aria'}:</b> <span>${t}</span>`;$('log').appendChild(d);$('log').scrollTop=1e9;return d.querySelector('span')}
+async function ask(msg,silent){if(busy)return;busy=true;$('status').textContent='Thinking…';if(!silent)log('u',msg);
+ const out=log('a','');let full='',buf='';
+ try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({message:msg,image_b64:frame(),history,persona:$('persona').value,lang:$('lang').value,use_kb:$('kb').checked})});
+  const rd=r.body.getReader(),dec=new TextDecoder();
+  while(true){const{done,value}=await rd.read();if(done)break;const t=dec.decode(value,{stream:true});full+=t;buf+=t;out.textContent=full;
+   const m=buf.match(/^([\s\S]*?[.!?؟۔]+)\s+([\s\S]*)$/);if(m){enqueue(m[1]);buf=m[2]}}
+  enqueue(buf);history.push({role:'user',text:msg},{role:'assistant',text:full});$('status').textContent='Ready'}
+ catch(e){$('status').textContent='Error: '+e}busy=false}
+$('txt').onkeydown=e=>{if(e.key==='Enter'&&e.target.value.trim()){ask(e.target.value.trim());e.target.value=''}};
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){const r=new SR();const m=$('mic');m.onmousedown=m.ontouchstart=()=>{stopAudio();r.lang=RL[$('lang').value];r.onresult=e=>ask(e.results[0][0].transcript);r.start();m.classList.add('on')};
+ m.onmouseup=m.ontouchend=()=>{r.stop();m.classList.remove('on')}}else $('mic').disabled=true;
+$('auto').onclick=e=>{if(autoTimer){clearInterval(autoTimer);autoTimer=null;e.target.textContent='👁 Auto: off'}else{e.target.textContent='👁 Auto: on';autoTimer=setInterval(()=>{if(!speaking&&!busy)ask('Give a brief live-stream style comment on what you see now.',true)},15000)}};
+$('pdf').onchange=async e=>{const f=new FormData();f.append('file',e.target.files[0]);$('status').textContent='Uploading…';
+ const r=await fetch('/api/upload',{method:'POST',body:f});const j=await r.json();$('status').textContent=`Knowledge loaded: ${j.chunks} chunks`;$('kb').checked=true};
+$('exp').onclick=()=>{const b=new Blob([JSON.stringify(history,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='chat.json';a.click()};
+</script></body></html>

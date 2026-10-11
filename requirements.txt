@@ -1,0 +1,7 @@
+streamlit
+google-genai
+edge-tts
+pillow
+# optional YOLO hybrid (heavy; remove if the cloud app runs out of memory):
+# ultralytics
+# opencv-python-headless
