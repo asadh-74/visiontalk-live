@@ -66,7 +66,8 @@ def detect(img):
         r = yolo().predict(img, conf=0.4, imgsz=320, verbose=False)[0]
         names = [r.names[int(c)] for c in r.boxes.cls.tolist()]
         return ", ".join(f"{v} {k}" for k, v in Counter(names).items()), Image.fromarray(r.plot()[..., ::-1])
-    except Exception:
+    except Exception as e:
+        st.warning(f"YOLO not available on this server: {e}")
         return None, img
 
 def ask_vlm(client, img, q, system, objs):
